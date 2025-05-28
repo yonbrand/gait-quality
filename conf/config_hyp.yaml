@@ -1,0 +1,30 @@
+defaults:
+  - _self_
+  - model: ElderNet
+  - augmentation: all
+  - dataloader: ten_sec
+
+model:
+  num_epochs : 100
+  warmup_epochs : 5
+  is_mtl: False
+  is_simclr: False
+  is_classification: False
+  is_regression: True
+  num_trials: 50
+  uncertainty: False
+  batch_norm: True
+  num_layers_regressor: 1
+
+data:
+  labels: gait_speed.p
+  cohort: TVS
+  data_root: N:\Gait-Neurodynamics by Names\Yonatan\gait-quality\data_parsing\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Train #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Train #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap\Train
+  log_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-quality\outputs\gait_speed
+  overlap: 9Sec
+  output_size: 1
+  max_mu: 1.8
+  max_var: 1
+  measure: 'gait speed'
+  unit: cm/s
+  title: 'Gait Speed'

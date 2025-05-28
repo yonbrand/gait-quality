@@ -1,0 +1,34 @@
+defaults:
+  - _self_
+  - model: ElderNet
+  - augmentation: all
+  - dataloader: ten_sec
+
+model:
+  num_epochs: 100
+  warmup_epochs: 5
+  is_mtl: False
+  is_simclr: False
+  is_classification: False
+  is_regression: True
+  uncertainty: False
+  batch_norm: True
+  num_layers_regressor: 2
+  lr: 0.0001
+  batch_size: 512
+  wd: 0.1
+  patience: 5
+  weights_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_speed\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\Combined_Resnet_pretrained_True_data_10_overlap_9Sec\2024-09-03_08-57-17 #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\DryRun_Resnet_pretrained_True_data_10_overlap_9Sec\2024-09-12_10-57-38
+  plot: True
+
+data:
+  labels: gait_speed.p
+  data_root:  N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Test  #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Test #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap_9sec_0.5nan_ratio_regularity_symmetry\Test #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Test #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\RUSH\data
+  log_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_speed\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\testing #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\testing #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\RUSH\data #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\Combined_Resnet_pretrained_True_data_10_overlap_9Sec\testing #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\testing #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\DryRun_Resnet_pretrained_True_data_10_overlap_9Sec\testing
+  overlap: 9Sec
+  output_size: 1
+  max_mu: 2
+  max_var: 1
+  measure: 'gait speed'
+  unit: cm/s
+  title: 'Gait Speed'

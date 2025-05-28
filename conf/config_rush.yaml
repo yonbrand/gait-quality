@@ -1,0 +1,92 @@
+defaults:
+  - _self_
+  - augmentation: all
+  - dataloader: ten_sec
+
+sensor_device: Axivity #Axivity GENEActive
+
+gait_detection:
+  net: ElderNet
+  feature_vector_size: 50
+  output_size: 2
+  head: fc
+  is_classification: True
+  pretrained: True
+  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\SSL\ssl_gait_detection\data\MobiliseD\final_training\TVS\83_without_preprocess\weights.pt
+  name_start_idx: 0
+
+gait_speed:
+  net: ElderNet
+  feature_vector_size: 128
+  head: fc
+  is_regression: True
+  uncertainty: False
+  num_layers_regressor: 0
+  batch_norm: False
+  pretrained: True
+  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_speed\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model_paper.pt  #D:\gait-speed\outputs\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt
+  name_start_idx: 1
+  max_mu: 2.0
+  max_var: 1.0
+
+#gait_speed:
+#  net: ResNet
+#  feature_vector_size: 128
+#  head: fc
+#  is_regression: True
+#  uncertainty: False
+#  num_layers_regressor: 3
+#  batch_norm: False
+#  pretrained: True
+#  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_speed\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt  #D:\gait-speed\outputs\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt
+#  name_start_idx: 1
+#  max_mu: 2.0
+#  max_var: 1.0
+
+cadence:
+  net: ElderNet
+  head: fc
+  feature_vector_size: 128
+  is_regression: True
+  uncertainty: False
+  num_layers_regressor: 1
+  batch_norm: True
+  pretrained: True
+  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\cadence\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt  #D:\gait-speed\outputs\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt
+  name_start_idx: 1
+  max_mu: 160
+  max_var: 300
+
+gait_length:
+  net: ElderNet
+  head: fc
+  feature_vector_size: 128
+  is_regression: True
+  uncertainty: False
+  num_layers_regressor: 1
+  batch_norm: True
+  pretrained: True
+  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_length\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt  #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_length\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt
+  name_start_idx: 1
+  max_mu: 2.0
+  max_var: 1.0
+
+
+regularity:
+  net: ElderNet
+  head: fc
+  feature_vector_size: 128
+  is_regression: True
+  uncertainty: False
+  num_layers_regressor: 1
+  batch_norm: False
+  pretrained: True
+  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\regularity\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt  #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_length\TVS_ElderNet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt
+  name_start_idx: 1
+  max_mu: 1.0
+  max_var: 1.0
+
+data:
+  data_path: N:\Projects\RUSH\Data\axivity 2024\Mat files\acc #N:\Projects\RUSH\Data\axivity 2024\Mat files\acc #N:/Projects/RUSH/Data/GENEActive_mat #N:\Projects\RUSH\Data\axivity 2024\Mat files\acc #N:/Projects/RUSH/Data/GENEActive_mat
+  log_path: N:\Gait-Neurodynamics by Names\Yonatan\RUSH\output_data
+  output_filename: 'axivity_PA2.csv'

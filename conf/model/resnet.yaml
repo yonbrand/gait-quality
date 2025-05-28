@@ -1,0 +1,7 @@
+name: "${model.ssl_method}_${model.net}_pretrained_${model.pretrained}"
+net: Resnet
+pretrained: True
+ssl_checkpoint_available: False
+ft_checkpoint_available: False
+trained_model_path : N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\torch_hub_cache\OxWearables_ssl-wearables_v1.0.0\model_check_point\mtl_best.mdl #mtl_5_best.mdl
+name_start_idx: 1
