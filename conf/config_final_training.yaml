@@ -11,7 +11,6 @@ model:
   is_simclr: False
   is_classification: False
   is_regression: True
-  uncertainty: False
   batch_norm: True
   num_layers_regressor: 2
   lr: 0.0001
@@ -28,4 +27,3 @@ data:
   overlap: 9Sec
   output_size: 1
   max_mu: 2
-  max_var: 1

@@ -41,7 +41,6 @@ def main(cfg):
                    'batch_size': cfg.model.batch_size,
                    'patience': cfg.model.patience,
                    'num_layers': cfg.model.num_layers_regressor,
-                   'max_var': cfg.data.max_var,
                    'wd': cfg.model.wd}
 
 
@@ -113,12 +112,8 @@ def main(cfg):
 
             optimizer.zero_grad()
             with torch.autocast(device_type='cuda', dtype=torch.float16):
-                if cfg.model.uncertainty:
-                    logits, vars = model(x)
-                    loss = loss_fn(logits.float(), y.float(), vars.float())
-                else:
-                    logits = model(x)
-                    loss = loss_fn(logits.float(), y.float())
+                logits = model(x)
+                loss = loss_fn(logits.float(), y.float())
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
