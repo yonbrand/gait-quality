@@ -4,7 +4,7 @@ Prepare Mobilise-D Dataset for ElderNet Fine-Tuning
 Data hierarchy: <COHORT>/<PARTICIPANT_ID>/Free-living/data.mat
 
 Cohorts: CHF, COPD, HA, PD, PFF, MS
-Original dataset: https://zenodo.org/records/13899386
+    Original dataset: https://zenodo.org/records/13899386
 
 This script extracts wrist and lower-back acceleration data and spatio-temporal gait annotations,
 generating 10-second overlapping windows for downstream model training.
@@ -27,7 +27,7 @@ OUTPUT_PATH = 'ten_seconds_windows_overlap_9sec_0.5nan_ratio'
 OUTPUT_PATH_TRAIN = os.path.join(OUTPUT_PATH, 'Train')
 OUTPUT_PATH_TEST = os.path.join(OUTPUT_PATH, 'Test')
 
-COHORTS = ['CHF']
+COHORTS = ['CHF', 'COPD', 'HA', 'MS', 'PD', 'PFF']
 WIN_LENGTH = 10          # seconds
 OVERLAP = 9              # seconds
 TARGET_FS = 30           # Hz
