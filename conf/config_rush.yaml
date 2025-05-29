@@ -29,19 +29,6 @@ gait_speed:
   max_mu: 2.0
   max_var: 1.0
 
-#gait_speed:
-#  net: ResNet
-#  feature_vector_size: 128
-#  head: fc
-#  is_regression: True
-#  uncertainty: False
-#  num_layers_regressor: 3
-#  batch_norm: False
-#  pretrained: True
-#  trained_model_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\outputs\gait_speed\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt  #D:\gait-speed\outputs\TVS_Resnet_pretrained_True_data_10_overlap_9Sec\final_training\final_model.pt
-#  name_start_idx: 1
-#  max_mu: 2.0
-#  max_var: 1.0
 
 cadence:
   net: ElderNet
@@ -87,6 +74,6 @@ regularity:
   max_var: 1.0
 
 data:
-  data_path: N:\Projects\RUSH\Data\axivity 2024\Mat files\acc #N:\Projects\RUSH\Data\axivity 2024\Mat files\acc #N:/Projects/RUSH/Data/GENEActive_mat #N:\Projects\RUSH\Data\axivity 2024\Mat files\acc #N:/Projects/RUSH/Data/GENEActive_mat
+  data_path: N:\Projects\RUSH\Data\axivity 2024\Mat files\acc
   log_path: N:\Gait-Neurodynamics by Names\Yonatan\RUSH\output_data
-  output_filename: 'axivity_PA2.csv'
+  output_filename: 'axivity_exp.csv'

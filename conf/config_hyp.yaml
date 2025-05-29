@@ -12,18 +12,18 @@ model:
   is_classification: False
   is_regression: True
   num_trials: 50
-  uncertainty: False
   batch_norm: True
   num_layers_regressor: 1
+  patience: 5
 
 data:
   labels: gait_speed.p
   cohort: TVS
-  data_root: N:\Gait-Neurodynamics by Names\Yonatan\gait-quality\data_parsing\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Train #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Train #N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\parsed_data\ten_seconds_windows_overlap\Train
-  log_path: N:\Gait-Neurodynamics by Names\Yonatan\gait-quality\outputs\gait_speed
+  data_root: \data_parsing\ten_seconds_windows_overlap_9sec_0.5nan_ratio\Train
+  log_path: outputs\gait_speed
   overlap: 9Sec
   output_size: 1
-  max_mu: 1.8
+  max_mu: 2 # 2 m/s for speed, 2m for stride length, 160 steps/min for cadence, and 1 for regularity
   max_var: 1
   measure: 'gait speed'
   unit: cm/s
