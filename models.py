@@ -5,6 +5,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+'''
+# ResNet-18 architecture sourced from: https://github.com/OxWearables/ssl-wearables
+# Used for training on the UK Biobank dataset.
+# ElderNet extends ResNet-18 with three additional fully connected layers, adapted for older adults using the RUSH MAP dataset.
+# A regressor class is employed for fine-tuning to predict continuous gait metrics.
+'''
+
+
 ####################################################################################################################
 # Contrastive Loss
 ####################################################################################################################
