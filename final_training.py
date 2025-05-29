@@ -14,10 +14,11 @@ from dataset.dataloader import FT_Dataset
 from dataset.transformations import RotationAxis, RandomSwitchAxis
 from utils import (EarlyStopping, set_seed, stratified_group_train_val_split, setup_model,
                    create_cosine_decay_with_warmup,evaluate_model)
-from constants import SEED as seed
 
 import hydra
 
+# GLOBAL SEED
+seed = 42
 
 '''
 Train ElderNet on the training dataset using the optimal configuration identified during hyperparameter tuning.

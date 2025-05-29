@@ -15,7 +15,6 @@ from torchvision import transforms
 from sklearn.metrics import mean_absolute_error
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from constants import SEED as seed
 from dataset.transformations import RotationAxis, RandomSwitchAxis
 from dataset.dataloader import FT_Dataset
 from utils import (EarlyStopping, set_seed, cleanup_gpu, setup_model,
@@ -23,6 +22,8 @@ from utils import (EarlyStopping, set_seed, cleanup_gpu, setup_model,
                    create_cosine_decay_with_warmup, plot_correlation_cohort,
                    evaluate_model, evaluate_metrics, compute_icc)
 
+# GLOBAL SEED
+seed = 42
 
 class DuplicateIterationPruner(BasePruner):
     """Pruner to detect duplicate trials based on parameters."""
@@ -135,6 +136,7 @@ def prepare_cached_data(cfg) -> list:
     with open(cache_dir / 'test_indices.p', 'wb') as f:
         pickle.dump(np.concatenate(all_test_indices), f)
     return preprocessed_data
+
 def setup_model_with_params(cfg, trial: optuna.Trial, device: torch.device) -> tuple:
     """Set up the model, optimizer, scheduler, and batch size based on trial hyperparameters.
 
@@ -262,7 +264,7 @@ def objective(trial: optuna.Trial, cfg, logger: logging.Logger, run_path: Path, 
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         loss_fn = nn.L1Loss()
-        early_stopping = EarlyStopping(patience=5, verbose=True,
+        early_stopping = EarlyStopping(patience=cfg.model.patience, verbose=True,
                                        path=os.path.join(run_path, f'checkpoint_trial{trial.number}.pt'))
         logger.info(f"Trial {trial.number} started with parameters: {trial.params}")
 
