@@ -14,7 +14,6 @@ now = datetime.now()
 
 @hydra.main(config_path="conf", config_name="config_test", version_base='1.1')
 def main(cfg):
-    # weights_path = cfg.model.weights_path
     output_path = cfg.data.log_path
     os.makedirs(output_path, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
