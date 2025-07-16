@@ -15,7 +15,7 @@ For more details, see the paper:
 ## Repository Structure
 
 - **`data_parsing/`**: Scripts for parsing and preparing data.
-- **`models/`**: Pre-trained models and configurations.
+- **`weights/`**: Pre-trained models and configurations.
 - **`RUSH/`**: Scripts for daily living analysis using the RUSH dataset.
 - **`hyperparameter_tuning.py`**: Finds optimal hyperparameters for each gait metric model.
 - **`final_training.py`**: Trains the model with the best configuration on the full training set.
