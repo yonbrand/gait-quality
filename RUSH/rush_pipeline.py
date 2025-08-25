@@ -3,17 +3,20 @@ import json
 import re
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Union
 from dateutil import parser
 import numpy as np
 from scipy.io import loadmat
 import mat73
 from scipy import signal
 import pandas as pd
+from pandas.tseries.frequencies import to_offset
 import logging
 import torch
 from scipy.stats import kurtosis, skew
 from tqdm import tqdm
 import hydra
+from actipy.reader import process as actipy_process
 
 from utils import loadmat, get_config, setup_model
 from regularity import calc_regularity
@@ -46,6 +49,129 @@ def load_mat_file(file):
         return None
     return data
 
+def acc2df(start_time_str, device_fs, periods, acc):
+    '''
+    Convert the acceleration data into df with datetime index
+    Args:
+        start_time_str: string containing the start time of the recording
+        device_fs
+        periods: length of the acceleration data
+        acc: n,3 acceleration signal
+
+    Returns:
+        date frame with the acceleration data
+    '''
+    # 1) start timestamp
+    start_time = pd.to_datetime(start_time_str,  # supply format=... if needed
+                                errors='raise')
+    # 2) sampling period in milliseconds, rounded to an int
+    period_ms = int(round(1_000 / device_fs))  # 20 for 50 Hz, 4 for 250 Hz, …
+    # 3) generate DateTimeIndex
+    dt_index = pd.date_range(start=start_time,
+                             periods=periods,
+                             freq=f'{period_ms}ms',  # '20ms', '4ms', …
+                             name='timestamp')
+    # 4) Create dataframe to analyze with actipy library
+    df_raw = pd.DataFrame(
+        acc,
+        index=dt_index,
+        columns=['x', 'y', 'z']
+    )
+    df_raw.index.name = 'time'
+    return df_raw
+
+def imputeMissing(data, extrapolate=True, target_fs=30):
+    """
+    Taken from: https://github.com/OxWearables/biobankAccelerometerAnalysis.git
+    Impute missing/nonwear segments
+    Impute non-wear data segments using the average of similar time-of-day values
+    with one minute granularity on different days of the measurement. This
+    imputation accounts for potential wear time diurnal bias where, for example,
+    if the device was systematically less worn during sleep in an individual,
+    the crude average vector magnitude during wear time would be a biased
+    overestimate of the true average. See
+    https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0169649#sec013
+
+    :param pandas.DataFrame e: Pandas dataframe of epoch data
+    :param bool verbose: Print verbose output
+
+    :return: Update DataFrame <e> columns nan values with time-of-day imputation
+    :rtype: void
+    """
+
+    if extrapolate:
+        step = pd.Timedelta(seconds=1) / target_fs
+        data = data.reindex(
+            pd.date_range(
+                data.index[0].floor('D'),
+                data.index[-1].ceil('D'),
+                freq=step,
+                inclusive='left',
+                name='time',
+            ),
+            method='nearest',
+            tolerance=pd.Timedelta('1m'),
+            limit=1)
+
+    def fillna(subframe):
+        # Transform will first pass the subframe column-by-column as a Series.
+        # After passing all columns, it will pass the entire subframe again as a DataFrame.
+        # Processing the entire subframe is optional (return value can be omitted). See 'Notes' in transform doc.
+        if isinstance(subframe, pd.Series):
+            x = subframe.to_numpy()
+            nan = np.isnan(x)
+            nanlen = len(x[nan])
+            if 0 < nanlen < len(x):  # check x contains a NaN and is not all NaN
+                x[nan] = np.nanmean(x)
+                return x  # will be cast back to a Series automatically
+            else:
+                return subframe
+
+    data = (
+        data
+        # first attempt imputation using same day of week
+        .groupby([data.index.weekday, data.index.hour, data.index.minute])
+        .transform(fillna)
+        # then try within weekday/weekend
+        .groupby([data.index.weekday >= 5, data.index.hour, data.index.minute])
+        .transform(fillna)
+        # finally, use all other days
+        .groupby([data.index.hour, data.index.minute])
+        .transform(fillna)
+    )
+
+    return data
+
+
+def drop_first_last_days(
+    x: Union[pd.Series, pd.DataFrame],
+    first_or_last='both'
+):
+    """
+    Drop the first day, last day, or both from a time series.
+
+    Parameters:
+    - x (pd.Series or pd.DataFrame): A pandas Series or DataFrame with a DatetimeIndex representing time series data.
+    - first_or_last (str, optional): A string indicating which days to drop. Options are 'first', 'last', or 'both'. Default is 'both'.
+
+    Returns:
+    - pd.Series or pd.DataFrame: A pandas Series or DataFrame with the values of the specified days dropped.
+
+    Example:
+        # Drop the first day from the series
+        series = drop_first_last_days(series, first_or_last='first')
+    """
+    if len(x) == 0:
+        print("No data to drop")
+        return x
+
+    if first_or_last == 'first':
+        x = x[x.index.date != x.index.date[0]]
+    elif first_or_last == 'last':
+        x = x[x.index.date != x.index.date[-1]]
+    elif first_or_last == 'both':
+        x = x[(x.index.date != x.index.date[0]) & (x.index.date != x.index.date[-1])]
+    return x
 
 def detect_non_wear_time(acceleration_data: np.ndarray, device_fs,
                          threshold_std: float = 0.01) -> np.ndarray:
@@ -215,6 +341,15 @@ def calculate_statistics(result, fs, win_step_len):
     daily_walking = np.array_split(result['pred_walk'], days)
     daily_walk_amounts = [sum(day) * seconds_per_sample / 60 for day in daily_walking]
 
+    # Calculate step count
+    bout_days = result['bout_days']
+    bout_steps = result['pred_bout_steps']
+    daily_step_count = []
+    for day in range(days):
+        mask = bout_days == day
+        day_bout_steps = bout_steps[mask]
+        daily_step_count.append(np.sum(day_bout_steps))
+
     # Pre-calculate bout masks for all unique bouts
     unique_bouts = np.unique(result['bouts_id'])
     bout_stats = {
@@ -247,26 +382,20 @@ def calculate_statistics(result, fs, win_step_len):
 
         if len(data) == 0:
             return {f'{prefix}{stat}': np.nan for stat in
-                    ['median', 'mean', 'std', 'p90', 'kurtosis', 'skewness',
-                     'var', 'peak_to_peak', 'hist_values', 'hist_bins']}
+                    ['median', 'mean', 'std', 'p5', 'p10', 'p90', 'p95', 'kurtosis', 'skewness',
+                     'range', 'hist_values', 'hist_bins']}
 
         stats_dict = {
             f'{prefix}median': np.median(data),
             f'{prefix}mean': np.mean(data),
             f'{prefix}std': np.std(data),
+            f'{prefix}p5': np.percentile(data, 5),
             f'{prefix}p10': np.percentile(data, 10),
-            f'{prefix}p20': np.percentile(data, 20),
-            f'{prefix}p30': np.percentile(data, 30),
-            f'{prefix}p40': np.percentile(data, 40),
-            f'{prefix}p50': np.percentile(data, 50),
-            f'{prefix}p60': np.percentile(data, 60),
-            f'{prefix}p70': np.percentile(data, 70),
-            f'{prefix}p80': np.percentile(data, 80),
             f'{prefix}p90': np.percentile(data, 90),
+            f'{prefix}p95': np.percentile(data, 95),
             f'{prefix}kurtosis': kurtosis(data),
             f'{prefix}skewness': skew(data),
-            f'{prefix}var': np.var(data),
-            f'{prefix}peak_to_peak': np.ptp(data)
+            f'{prefix}range': np.ptp(data)
         }
         if save_all:
             stats_dict[f'{prefix}all_values'] = json.dumps(data.tolist())
@@ -276,6 +405,7 @@ def calculate_statistics(result, fs, win_step_len):
         'sub_id': result['subject_id'],
         'wear_days': result['wear_days'],
         **calc_stats(daily_walk_amounts, 'daily_walking_'),
+        **calc_stats(daily_step_count, 'daily_step_count_'),
         **calc_stats(result['bouts_durations'], 'bout_duration_', save_all=True),
         **calc_stats(result['pred_speed'], 'gait_speed_', save_all=True),
         **calc_stats(bout_stats['speeds'], 'bout_gait_speed_', save_all=True),
@@ -289,7 +419,6 @@ def calculate_statistics(result, fs, win_step_len):
         **calc_stats(bout_stats['regularity_eldernet'], 'bout_regularity_eldernet_', save_all=True),
         **calc_stats(result['pred_regularity_sp'], 'regularity_sp_', save_all=True),
         **calc_stats(bout_stats['regularity_sp'], 'bout_regularity_sp_', save_all=True),
-        # --- New PA features statistics ---
         **calc_stats(result['daily_pa_mean'], 'daily_pa_mean_', save_all=True),
         **calc_stats(result['daily_pa_std'], 'daily_pa_std_', save_all=True),
         **calc_stats(result['daily_pa_max'], 'daily_pa_max_', save_all=True),
@@ -299,9 +428,10 @@ def calculate_statistics(result, fs, win_step_len):
     }
 
 
-def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, cadence_model, gait_length_model,
+def process_and_analyze_subject(file, gait_detection_model, step_count_model,
+                                gait_speed_model, cadence_model, gait_length_model,
                                 regularity_model, device, sensor_device,
-                                fs, win_step_len):
+                                target_fs, win_step_len):
     try:
         data = load_mat_file(file)
         if data is None:
@@ -321,7 +451,7 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
                 start_time_str = start_time_match.group(1)
 
         elif sensor_device == 'Axivity':
-            acc = data['New_Data'].astype(float)
+            acc = data['New_Data'].astype(float) # shape (N,3)
             device_fs = 50  # 50 hz is the default sampling rate for Axivity
             # Modify the file name from the acceleration file to the info file
             info_path = file.with_name(file.stem + "_info" + file.suffix)  # Adds "_info" before the .mat extension
@@ -329,45 +459,26 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
             info = load_mat_file(info_path)
             start_time_str = info['fileinfo']['start']['str']
 
-        # Find the starting date and converting to datetime
-        start_date = parser.parse(start_time_str)
-        # Get the day of the week as an integer (0 = Monday, 6 = Sunday)
-        day_of_week = start_date.weekday()
-        # We take data starting from the second day (starting from midnight)
-        day_of_week = 0 if day_of_week == 6 else day_of_week + 1
-
-        wear_time_mask = detect_non_wear_time(acceleration_data=acc, device_fs=device_fs)
-        sync_start_point, midnight_start = time_synch(start_date, device_fs)
-        acc = acc[sync_start_point:]
-        wear_time_mask = wear_time_mask[sync_start_point:]
-
-        samples_per_day = int(device_fs * 60 * 60 * 24)
-        days_in_data = acc.shape[0] // samples_per_day
-        acc = acc[:samples_per_day * days_in_data]
-        wear_time_mask = wear_time_mask[:samples_per_day * days_in_data]
-
-        wear_time_by_day = wear_time_mask.reshape(days_in_data, samples_per_day)
-        daily_wear_percentage = wear_time_by_day.mean(axis=1)
-        # Find complete wear days (e.g., >80% wear time)
-        complete_wear_days = np.where(daily_wear_percentage > 0.8)[0]
-        # Analyze data only if there are 3+ days
-        wear_days_in_data = len(complete_wear_days)
-        acc_wear = np.empty((0, 3))
-        if wear_days_in_data >= 3:
-            for day in complete_wear_days:
-                acc_day = acc[samples_per_day * day: samples_per_day * (day + 1)]
-                acc_wear = np.append(acc_wear, acc_day, axis=0)
-        else:
-            return None
-
-        # Resample data to target frequency (fs)
-        resampled_acc = resample_data(acc_wear, device_fs, fs)
-
-        # --- New: Compute day-level physical activity (PA) measures ---
+         # Convert to df
+        df_raw = acc2df(start_time_str, device_fs, len(acc), acc)
+        #Preprocess using actipy
+        df_proc, info_actipy = actipy_process(
+                df_raw,
+                sample_rate=device_fs,
+                lowpass_hz=None,
+                calibrate_gravity=True,
+                detect_nonwear=True,
+                resample_hz=target_fs,
+                verbose=True
+            )
+        df_imputed = imputeMissing(df_proc)
+        df_imputed = drop_first_last_days(df_imputed, 'both')
+        processed_acc = df_imputed[['x', 'y', 'z']].to_numpy()
+        # Compute day-level physical activity (PA) measures
         # Calculate the vector magnitude of acceleration for PA features
-        acc_magnitude = np.linalg.norm(resampled_acc, axis=1)
-        samples_per_day_resampled = int(24 * 60 * 60 * fs)
-        num_days = resampled_acc.shape[0] // samples_per_day_resampled
+        acc_magnitude = np.linalg.norm(processed_acc, axis=1)
+        samples_per_day_resampled = int(24 * 60 * 60 * target_fs)
+        num_days = processed_acc.shape[0] // samples_per_day_resampled
         if num_days > 0:
             acc_magnitude = acc_magnitude[:num_days * samples_per_day_resampled]
             daily_pa = acc_magnitude.reshape(num_days, samples_per_day_resampled)
@@ -382,7 +493,7 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
             daily_pa_min = []
 
         acc_win_all = np.array(
-            [resampled_acc[i:i + WINDOW_LEN] for i in range(0, len(resampled_acc) - WINDOW_LEN + 1, WINDOW_STEP_LEN)]
+            [processed_acc[i:i + WINDOW_LEN] for i in range(0, len(processed_acc) - WINDOW_LEN + 1, WINDOW_STEP_LEN)]
         )
 
         # Process data in batches
@@ -396,35 +507,34 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
         pred_walk = np.array(pred_walk)
 
         # Map window predictions to seconds based on the middle-second approach
-        second_predictions = np.zeros(len(resampled_acc) // fs, dtype=int)
+        second_predictions = np.zeros(len(processed_acc) // target_fs, dtype=int)
         second_predictions_walk = calc_second_prediction(pred_walk, WINDOW_SEC, second_predictions)
         # Merge near bouts
-        sec_per_sample = win_step_len / fs  # 1 for 90% overlap, 10 for no overlap
+        sec_per_sample = win_step_len / target_fs  # 1 for 90% overlap, 10 for no overlap
         merged_predictions_walk = merge_gait_bouts(second_predictions_walk, sec_per_sample, 10, 3)
-        flat_predictions = np.repeat(merged_predictions_walk, fs)
+        flat_predictions = np.repeat(merged_predictions_walk, target_fs)
         bouts_id = detect_bouts(flat_predictions)
-        unq_bouts = np.unique(bouts_id[bouts_id != 0])
+        bout_mask = bouts_id != 0
+        unq_bouts = np.unique(bouts_id[bout_mask])
+
         bouts_win_all = []
         walking_bouts_id = []
         bouts_durations = []
-
-        # --- New: Initialize lists for bout-level PA measures ---
         bout_pa_means = []
         bout_pa_stds = []
-
         for bout in unq_bouts:
             bout_predictions = np.where(bouts_id == bout)[0]
-            acc_bout = resampled_acc[bout_predictions]
+            acc_bout = processed_acc[bout_predictions]
             bout_win = np.array(
                 [acc_bout[i:i + WINDOW_LEN] for i in range(0, len(acc_bout) - WINDOW_LEN + 1, WINDOW_STEP_LEN)]
             )
-            bout_duration = int(len(acc_bout) / fs)
+            bout_duration = int(len(acc_bout) / target_fs)
             bouts_win_all.append(bout_win)
             current_bout_id = np.ones(bout_win.shape[0]) * bout
             walking_bouts_id.append(current_bout_id)
             bouts_durations.append(bout_duration)
 
-            # --- New: Compute bout-level PA features ---
+            # Compute bout-level PA features
             bout_magnitude = np.linalg.norm(acc_bout, axis=1)
             bout_pa_means.append(np.mean(bout_magnitude))
             bout_pa_stds.append(np.std(bout_magnitude))
@@ -438,28 +548,53 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
 
         if walking_batch.size > 0:
             # Process walking windows with gait quality models
+            pred_steps = []
             pred_speed = []
             pred_cadence = []
             pred_gait_length = []
-            pred_gait_length_indirect = []
             pred_regularity_eldernet = []
             for i in range(0, len(walking_batch), batch_size):
                 batch = walking_batch[i:i + batch_size]
+                batch_pred_steps = process_batch(batch, step_count_model, device)
                 batch_pred_speed = process_batch(batch, gait_speed_model, device)
                 batch_pred_cadence = process_batch(batch, cadence_model, device)
                 batch_pred_gait_length = process_batch(batch, gait_length_model, device)
                 batch_pred_regularity_eldernet = process_batch(batch, regularity_model, device)
+                pred_steps.extend(batch_pred_steps)
                 pred_speed.extend(batch_pred_speed)
                 pred_cadence.extend(batch_pred_cadence)
                 pred_gait_length.extend(batch_pred_gait_length)
                 pred_regularity_eldernet.extend(batch_pred_regularity_eldernet)
 
+            pred_steps = np.array(np.round(pred_steps)) # round the predictions to whole numbers
             pred_speed = np.array(pred_speed)
             pred_cadence = np.array(pred_cadence)
             pred_gait_length = np.array(pred_gait_length)
             pred_gait_length_indirect = np.array(120 * pred_speed / pred_cadence)
             pred_regularity_eldernet = np.array(pred_regularity_eldernet)
-            pred_regularity_sp = process_signal_regularity(walking_batch, fs)
+            pred_regularity_sp = process_signal_regularity(walking_batch, target_fs)
+
+            # Step count processing
+            # Find the day correspond to each bout
+            days_array = np.repeat(np.arange(num_days), len(flat_predictions) // num_days)
+            day_per_bout = []
+            pred_bout_steps = []
+            for bout_idx, bout in enumerate(unq_bouts):
+                bout_samples = np.where(bouts_id == bout)[0]
+                if len(bout_samples) > 0:
+                    bout_day = days_array[bout_samples[0]]  # Day of the first sample
+                    day_per_bout.append(bout_day)
+                # Existing step calculation
+                bout_predictions = np.where(walking_bouts_id == bout)[0]
+                bout_len = len(bout_predictions)
+                median_bout_steps = np.median(pred_steps[bout_predictions])
+                adj_factor = 0.1 * (bout_len - 1) + 1
+                adj_bout_steps = adj_factor * median_bout_steps
+                pred_bout_steps.append(adj_bout_steps)
+            # Convert to np arrays
+            pred_bout_steps = np.array(pred_bout_steps)
+            day_per_bout = np.array(day_per_bout)
+
         else:
             pred_speed = np.array([])
             pred_cadence = np.array([])
@@ -467,6 +602,9 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
             pred_gait_length_indirect = np.array([])
             pred_regularity_eldernet = np.array([])
             pred_regularity_sp = np.array([])
+            pred_bout_steps = np.array([])
+            day_per_bout = np.array([])
+
 
         file_path = Path(file)
         sub_id = '_'.join(file_path.stem.split('-')[:2])
@@ -474,8 +612,10 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
         # Create result dictionary and include new PA features
         result = {
             'subject_id': sub_id,
-            'wear_days': wear_days_in_data,
+            'wear_days': num_days,
+            'bout_days': day_per_bout,
             'pred_walk': merged_predictions_walk,
+            'pred_bout_steps': pred_bout_steps,
             'pred_speed': pred_speed,
             'pred_cadence': pred_cadence,
             'pred_gait_length': pred_gait_length,
@@ -484,18 +624,16 @@ def process_and_analyze_subject(file, gait_detection_model, gait_speed_model, ca
             'pred_regularity_sp': pred_regularity_sp,
             'bouts_id': walking_bouts_id,
             'bouts_durations': bouts_durations,
-            # --- Add day-level PA features ---
             'daily_pa_mean': daily_pa_mean,
             'daily_pa_std': daily_pa_std,
             'daily_pa_max': daily_pa_max,
             'daily_pa_min': daily_pa_min,
-            # --- Add bout-level PA features ---
             'bout_pa_mean': bout_pa_means,
             'bout_pa_std': bout_pa_stds
         }
 
         # Calculate statistics (including PA features)
-        stats = calculate_statistics(result, fs, win_step_len)
+        stats = calculate_statistics(result, target_fs, win_step_len)
         return stats
 
     except Exception as e:
@@ -511,7 +649,7 @@ def list_filtered_mat_files(directory):
     ]
 
 
-@hydra.main(config_path="conf", config_name="config_rush",
+@hydra.main(config_path="../conf", config_name="config_rush",
             version_base='1.1')
 def main(cfg):
     data_files = Path(cfg.data.data_path)
@@ -522,6 +660,7 @@ def main(cfg):
 
     # Load the models
     gait_detection_cfg = get_config(cfg, model_type='gait_detection')
+    step_count_cfg = get_config(cfg, model_type='step_count')
     gait_speed_cfg = get_config(cfg, model_type='gait_speed')
     cadence_model_cfg = get_config(cfg, model_type='cadence')
     gait_length_model_cfg = get_config(cfg, model_type='gait_length')
@@ -536,6 +675,19 @@ def main(cfg):
         pretrained=gait_detection_cfg.pretrained,
         trained_model_path=gait_detection_cfg.trained_model_path,
         output_size=gait_detection_cfg.output_size,
+        device=device)
+
+    step_count_model = setup_model(
+        net=step_count_cfg.net,
+        head=step_count_cfg.head if step_count_cfg.net == 'ElderNet' else None,
+        eldernet_linear_output=step_count_cfg.feature_vector_size if step_count_cfg.net == 'ElderNet' else None,
+        epoch_len=cfg.dataloader.epoch_len,
+        is_regression=step_count_cfg.is_regression,
+        max_mu=step_count_cfg.max_mu,
+        num_layers_regressor=step_count_cfg.num_layers_regressor,
+        batch_norm=step_count_cfg.batch_norm,
+        pretrained=step_count_cfg.pretrained,
+        trained_model_path=step_count_cfg.trained_model_path,
         device=device)
 
     gait_speed_model = setup_model(
@@ -597,9 +749,10 @@ def main(cfg):
 
     # Process files
     results = []
-    for file in tqdm(files_to_process, desc="Processing files"):
-        result = process_and_analyze_subject(file, gait_detection_model, gait_speed_model, cadence_model,
-                                             gait_length_model, regularity_model, device, sensor_device,
+    for i, file in enumerate(tqdm(files_to_process, desc="Processing files")):
+        result = process_and_analyze_subject(file, gait_detection_model, step_count_model, gait_speed_model,
+                                             cadence_model,gait_length_model, regularity_model,
+                                             device, sensor_device,
                                              RESAMPLED_HZ, WINDOW_STEP_LEN)
         if result is not None:
             results.append(result)
