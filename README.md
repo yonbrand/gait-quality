@@ -1,5 +1,5 @@
 # ElderNet: Gait Quality Estimation for Older Adults
-![pipeline](/imgs/figure 1.png)
+![pipeline](/imgs/pipeline.png)
 ## Overview
 This repository implements **ElderNet**, a deep learning model for gait quality estimation optimized for older adults, including those with impaired gait. ElderNet leverages self-supervised learning (SSL) and fine-tuning to detect gait metrics from wrist-worn accelerometer data. It is fine-tuned for four gait metrics:
 - Gait speed
