@@ -203,6 +203,51 @@ def resample_data(data, original_fs, target_fs):
     return signal.resample(data, num_samples)
 
 
+def calculate_tdpa(enmo_signal, target_fs):
+    """
+    Calculates TDPA by summing ENMO in 15-second epochs,
+    then summing those epochs over each day.
+
+    Args:
+        enmo_signal (np.ndarray): The 1D ENMO signal (at target_fs).
+        target_fs (int): The sampling frequency (e.g., 30 Hz).
+
+    Returns:
+        np.ndarray: An array of daily total PA scores.
+    """
+    try:
+        # 1. Resample to 15-second "activity counts" by summing
+        epoch_len_samples = int(target_fs * 15)  # 30 Hz * 15s = 450 samples
+        n_epochs = len(enmo_signal) // epoch_len_samples
+
+        if n_epochs == 0:
+            return np.array([])
+
+        enmo_truncated = enmo_signal[:n_epochs * epoch_len_samples]
+        enmo_epochs_15s = enmo_truncated.reshape(n_epochs, epoch_len_samples)
+
+        # This is our emulated "activity count" time series
+        activity_counts_15s = enmo_epochs_15s.sum(axis=1)
+
+        # 2. Sum these "counts" over 24-hour periods
+        epochs_per_day = int(24 * 60 * 60 / 15)  # 5760 epochs per day
+        num_days = len(activity_counts_15s) // epochs_per_day
+
+        if num_days == 0:
+            return np.array([])
+
+        counts_truncated = activity_counts_15s[:num_days * epochs_per_day]
+        daily_counts_reshaped = counts_truncated.reshape(num_days, epochs_per_day)
+
+        # This is the final Buchman-style daily score
+        tdpa = daily_counts_reshaped.sum(axis=1)
+
+        return tdpa
+
+    except Exception as e:
+        logging.error(f"Error calculating Buchman-style PA: {e}")
+        return np.array([])
+
 # Function to process gait regularity using signal processing
 def process_signal_regularity(walking_batch, fs):
     regularity_scores = np.array([calc_regularity(np.linalg.norm(segment, axis=1), fs) for segment in walking_batch])
@@ -421,8 +466,7 @@ def calculate_statistics(result, fs, win_step_len):
         **calc_stats(bout_stats['regularity_sp'], 'bout_regularity_sp_', save_all=True),
         **calc_stats(result['daily_pa_mean'], 'daily_pa_mean_', save_all=True),
         **calc_stats(result['daily_pa_std'], 'daily_pa_std_', save_all=True),
-        **calc_stats(result['daily_pa_max'], 'daily_pa_max_', save_all=True),
-        **calc_stats(result['daily_pa_min'], 'daily_pa_min_', save_all=True),
+        **calc_stats(result['tdpa'], 'tdpa_', save_all=True),
         **calc_stats(result['bout_pa_mean'], 'bout_pa_mean_', save_all=True),
         **calc_stats(result['bout_pa_std'], 'bout_pa_std_', save_all=True)
     }
@@ -475,17 +519,26 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
         df_imputed = drop_first_last_days(df_imputed, 'both')
         processed_acc = df_imputed[['x', 'y', 'z']].to_numpy()
         # Compute day-level physical activity (PA) measures
-        # Calculate the vector magnitude of acceleration for PA features
-        acc_magnitude = np.linalg.norm(processed_acc, axis=1)
+        # Calculate the vector magnitude
+        vm = np.linalg.norm(processed_acc, axis=1)
+        # Calculate ENMO (Euclidean Norm Minus One), floored at 0
+        # We use 1.0 because actipy has already calibrated the data to 'g' units
+        enmo_signal = np.clip(vm - 1.0, a_min=0, a_max=None)
+
+        # Optional: Convert to milli-g (mg) for standard reporting
+        enmo_signal_mg = enmo_signal * 1000
+
         samples_per_day_resampled = int(24 * 60 * 60 * target_fs)
-        num_days = processed_acc.shape[0] // samples_per_day_resampled
+        num_days = enmo_signal_mg.shape[0] // samples_per_day_resampled
+
         if num_days > 0:
-            acc_magnitude = acc_magnitude[:num_days * samples_per_day_resampled]
-            daily_pa = acc_magnitude.reshape(num_days, samples_per_day_resampled)
-            daily_pa_mean = daily_pa.mean(axis=1)
+            # Use the new enmo_signal_mg for PA stats
+            enmo_signal_daily = enmo_signal_mg[:num_days * samples_per_day_resampled]
+            daily_pa = enmo_signal_daily.reshape(num_days, samples_per_day_resampled)
+            daily_pa_mean = daily_pa.mean(axis=1)  # This is your "classical UKB" metric
             daily_pa_std = daily_pa.std(axis=1)
-            daily_pa_max = daily_pa.max(axis=1)
-            daily_pa_min = daily_pa.min(axis=1)
+            daily_pa_max = daily_pa.max(axis=1)  # Still not recommended, but now it's ENMO max
+            daily_pa_min = daily_pa.min(axis=1)  # This will now correctly be 0
         else:
             daily_pa_mean = []
             daily_pa_std = []
@@ -495,6 +548,11 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
         acc_win_all = np.array(
             [processed_acc[i:i + WINDOW_LEN] for i in range(0, len(processed_acc) - WINDOW_LEN + 1, WINDOW_STEP_LEN)]
         )
+
+        # Calculate Total Daily PA (Sum of Sums)
+        # We use the raw 'g' unit signal, as scaling by 1000
+        # just makes the final sum very large.
+        daily_pa_sum = calculate_tdpa(enmo_signal, target_fs)
 
         # Process data in batches
         batch_size = acc_win_all.shape[0] // NUM_BATCHES
@@ -522,6 +580,8 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
         bouts_durations = []
         bout_pa_means = []
         bout_pa_stds = []
+        bouts_win_start_timestamps = []
+
         for bout in unq_bouts:
             bout_predictions = np.where(bouts_id == bout)[0]
             acc_bout = processed_acc[bout_predictions]
@@ -629,7 +689,8 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
             'daily_pa_max': daily_pa_max,
             'daily_pa_min': daily_pa_min,
             'bout_pa_mean': bout_pa_means,
-            'bout_pa_std': bout_pa_stds
+            'bout_pa_std': bout_pa_stds,
+            'tdpa': daily_pa_sum
         }
 
         # Calculate statistics (including PA features)
@@ -642,12 +703,25 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
 
 
 def list_filtered_mat_files(directory):
-    """List all .mat files excluding specific patterns."""
+    """List all .mat files excluding specific patterns and folders."""
+
+    # Patterns to exclude from file names
+    name_exclude_patterns = ["UpSideDown", "WearTime", "Temp.mat", "Time.mat", "info.mat"]
+
+    # Folder names to exclude. Add any other folders here.
+    # Using a set {} is more efficient for lookups than a list [].
+    folder_exclude_patterns = {"doubles", "small_amount_data"}
+
     return [
         file for file in Path(directory).rglob("*.mat")
-        if not any(pattern in file.name for pattern in ["UpSideDown", "WearTime", "Temp.mat", "Time.mat", "info.mat"])
-    ]
+        # 1. Keep the original filter for file names
+        if not any(pattern in file.name for pattern in name_exclude_patterns)
 
+           # 2. Add new filter for folder names
+           #    file.parts is a tuple of all components of the path (e.g., ('G:', 'Data', 'doubles', 'file.mat'))
+           #    This checks if any component of the path is in our folder_exclude_patterns set.
+           and not any(part in folder_exclude_patterns for part in file.parts)
+    ]
 
 @hydra.main(config_path="../conf", config_name="config_rush",
             version_base='1.1')
