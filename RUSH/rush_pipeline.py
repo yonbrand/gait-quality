@@ -446,6 +446,30 @@ def calculate_statistics(result, fs, win_step_len):
             stats_dict[f'{prefix}all_values'] = json.dumps(data.tolist())
         return stats_dict
 
+    # Convert timestamps to string for JSON serialization
+    if 'walking_window_timestamps' in result:
+        # Timestamps might be empty array
+        if isinstance(result['walking_window_timestamps'], np.ndarray) and result['walking_window_timestamps'].size > 0:
+            timestamps_str = [ts.isoformat() for ts in result['walking_window_timestamps']]
+        elif isinstance(result['walking_window_timestamps'], list) and len(result['walking_window_timestamps']) > 0:
+            timestamps_str = [ts.isoformat() for ts in result['walking_window_timestamps']]
+        else:
+            timestamps_str = []
+    else:
+        timestamps_str = []
+
+
+    if 'bout_start_timestamps' in result:
+        # Timestamps might be empty array
+        if isinstance(result['bout_start_timestamps'], np.ndarray) and result['bout_start_timestamps'].size > 0:
+            timestamps_str_bout = [ts.isoformat() for ts in result['bout_start_timestamps']]
+        elif isinstance(result['bout_start_timestamps'], list) and len(result['bout_start_timestamps']) > 0:
+            timestamps_str_bout = [ts.isoformat() for ts in result['bout_start_timestamps']]
+        else:
+            timestamps_str_bout = []
+    else:
+        timestamps_str_bout = []
+
     return {
         'sub_id': result['subject_id'],
         'wear_days': result['wear_days'],
@@ -468,7 +492,9 @@ def calculate_statistics(result, fs, win_step_len):
         **calc_stats(result['daily_pa_std'], 'daily_pa_std_', save_all=True),
         **calc_stats(result['tdpa'], 'tdpa_', save_all=True),
         **calc_stats(result['bout_pa_mean'], 'bout_pa_mean_', save_all=True),
-        **calc_stats(result['bout_pa_std'], 'bout_pa_std_', save_all=True)
+        **calc_stats(result['bout_pa_std'], 'bout_pa_std_', save_all=True),
+        'walking_window_timestamps': json.dumps(timestamps_str),
+        'bout_start_timestamps': json.dumps(timestamps_str_bout)
     }
 
 
@@ -580,14 +606,32 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
         bouts_durations = []
         bout_pa_means = []
         bout_pa_stds = []
-        bouts_win_start_timestamps = []
+        win_start_timestamps = []
+        bouts_start_timestamps = []
 
         for bout in unq_bouts:
             bout_predictions = np.where(bouts_id == bout)[0]
             acc_bout = processed_acc[bout_predictions]
+
+            # bout_win = np.array(
+            #     [acc_bout[i:i + WINDOW_LEN] for i in range(0, len(acc_bout) - WINDOW_LEN + 1, WINDOW_STEP_LEN)]
+            # )
+
+            # Get window start indices relative to acc_bout
+            window_start_indices_in_bout = range(0, len(acc_bout) - WINDOW_LEN + 1, WINDOW_STEP_LEN)
             bout_win = np.array(
-                [acc_bout[i:i + WINDOW_LEN] for i in range(0, len(acc_bout) - WINDOW_LEN + 1, WINDOW_STEP_LEN)]
+                [acc_bout[i:i + WINDOW_LEN] for i in window_start_indices_in_bout]
             )
+
+            # Get timestamps for windows & bouts
+            bout_start_sample_index = bout_predictions[0]
+            bouts_start_timestamps.append(df_imputed.index[bout_start_sample_index])
+
+            for i in window_start_indices_in_bout:
+                # Map index from acc_bout back to original processed_acc
+                original_sample_index = bout_predictions[i]
+                win_start_timestamps.append(df_imputed.index[original_sample_index])
+
             bout_duration = int(len(acc_bout) / target_fs)
             bouts_win_all.append(bout_win)
             current_bout_id = np.ones(bout_win.shape[0]) * bout
@@ -598,6 +642,8 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
             bout_magnitude = np.linalg.norm(acc_bout, axis=1)
             bout_pa_means.append(np.mean(bout_magnitude))
             bout_pa_stds.append(np.std(bout_magnitude))
+
+        win_start_timestamps = np.array(win_start_timestamps)
 
         if walking_bouts_id:
             walking_bouts_id = np.concatenate(walking_bouts_id)
@@ -684,10 +730,10 @@ def process_and_analyze_subject(file, gait_detection_model, step_count_model,
             'pred_regularity_sp': pred_regularity_sp,
             'bouts_id': walking_bouts_id,
             'bouts_durations': bouts_durations,
+            'walking_window_timestamps': win_start_timestamps,
+            'bouts_start_timestamps': bouts_start_timestamps,
             'daily_pa_mean': daily_pa_mean,
             'daily_pa_std': daily_pa_std,
-            'daily_pa_max': daily_pa_max,
-            'daily_pa_min': daily_pa_min,
             'bout_pa_mean': bout_pa_means,
             'bout_pa_std': bout_pa_stds,
             'tdpa': daily_pa_sum
