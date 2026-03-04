@@ -7,5 +7,5 @@ non_linearity: True
 pretrained: True
 ssl_checkpoint_available: False
 ft_checkpoint_available: False
-trained_model_path : weights\ssl_weights.mdl
+trained_model_path: weights/ssl_eldernet_weights.mdl
 name_start_idx: 0

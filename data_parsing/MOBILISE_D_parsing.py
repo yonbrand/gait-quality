@@ -9,9 +9,15 @@ Cohorts: CHF, COPD, HA, PD, PFF, MS
 This script extracts wrist and lower-back acceleration data and spatio-temporal gait annotations,
 generating 10-second overlapping windows for downstream model training.
 
+Usage:
+    python MOBILISE_D_parsing.py --input /path/to/mobilise-d/data
+    python MOBILISE_D_parsing.py --input /path/to/data --output /path/to/output
+
 """
 
 import os
+import sys
+import argparse
 import pickle
 import numpy as np
 import pandas as pd
@@ -22,8 +28,17 @@ from regularity import calc_regularity
 
 # -------------------- Configuration --------------------
 
-INPUT_PATH = '<>'
-OUTPUT_PATH = 'ten_seconds_windows_overlap_9sec_0.5nan_ratio'
+def parse_args():
+    parser = argparse.ArgumentParser(description='Prepare Mobilise-D dataset for ElderNet fine-tuning')
+    parser.add_argument('--input', type=str, required=True,
+                        help='Path to Mobilise-D data directory containing cohort folders (CHF, COPD, etc.)')
+    parser.add_argument('--output', type=str, default='ten_seconds_windows_overlap_9sec_0.5nan_ratio',
+                        help='Output directory for processed data (default: ten_seconds_windows_overlap_9sec_0.5nan_ratio)')
+    return parser.parse_args()
+
+args = parse_args()
+INPUT_PATH = args.input
+OUTPUT_PATH = args.output
 OUTPUT_PATH_TRAIN = os.path.join(OUTPUT_PATH, 'Train')
 OUTPUT_PATH_TEST = os.path.join(OUTPUT_PATH, 'Test')
 

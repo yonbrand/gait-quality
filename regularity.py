@@ -98,11 +98,11 @@ def correct_peaks(data, pks, locs):
 def calc_regularity(acc, sample_rate):
     """
     Calculate gait regularity from lower-back acceleration data.
-    This is a python version of the MATLAB code, found here:
-    "N:\Projects\Mobilise-D\WP2\Secondary Gait Metrics Codes\SO environment\SO_driver\Library\SO_functions\RegularitySymmetry.m"
+    Based on the autocorrelation method for stride regularity estimation.
+
     :param acc: array-like in the shape of (n,). Representing the acceleration magnitude.
-    :param sample_rate:
-    :return: Stride regularity, measure of the gait consistency
+    :param sample_rate: Sampling frequency in Hz.
+    :return: Stride regularity, measure of the gait consistency (0-1 scale).
     """
     c, lags = xcov(acc, biased=True)
     normalized_c = c / c.max()

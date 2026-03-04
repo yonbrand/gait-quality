@@ -1,3 +1,4 @@
+import os
 import random
 import math
 import pickle
@@ -64,14 +65,39 @@ def cleanup_gpu():
 
 
 def set_seed(seed=42):
+    """Set seeds for reproducibility across all libraries.
+
+    Args:
+        seed: Random seed value (default: 42)
+    """
+    # Python's built-in random
     random.seed(seed)
+
+    # Environment variable for hash seed
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+    # NumPy
     np.random.seed(seed)
+
+    # PyTorch
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+        # For CUDA >= 10.2, set workspace config for full determinism
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+
+    # CuDNN deterministic settings
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+    # Enable PyTorch deterministic algorithms (PyTorch >= 1.8)
+    if hasattr(torch, 'use_deterministic_algorithms'):
+        try:
+            torch.use_deterministic_algorithms(True)
+        except RuntimeError:
+            # Some operations don't have deterministic implementations
+            pass
 
 
 ###################################################################################################################

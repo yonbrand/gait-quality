@@ -70,8 +70,11 @@ def main(cfg):
 
     train_dataset = FT_Dataset(X[train_idx], Y[train_idx], name="training", cfg=cfg, transform=transform)
     val_dataset = FT_Dataset(X[val_idx], Y[val_idx], name="validation", cfg=cfg, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=best_params['batch_size'], shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=best_params['batch_size'],  pin_memory=True)
+    # Create generator for reproducible shuffling
+    g = torch.Generator()
+    g.manual_seed(seed)
+    train_loader = DataLoader(train_dataset, batch_size=best_params['batch_size'], shuffle=True, pin_memory=True, generator=g)
+    val_loader = DataLoader(val_dataset, batch_size=best_params['batch_size'], pin_memory=True)
 
 
     

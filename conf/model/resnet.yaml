@@ -3,5 +3,5 @@ net: Resnet
 pretrained: True
 ssl_checkpoint_available: False
 ft_checkpoint_available: False
-trained_model_path : N:\Gait-Neurodynamics by Names\Yonatan\gait-speed\torch_hub_cache\OxWearables_ssl-wearables_v1.0.0\model_check_point\mtl_best.mdl #mtl_5_best.mdl
+trained_model_path: weights/ssl_ukb_weights.mdl  # Pre-trained SSL weights from OxWearables
 name_start_idx: 1

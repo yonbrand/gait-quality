@@ -6,14 +6,20 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from utils import TestDataset, setup_model, test_model, evaluate_metrics, compute_icc, plot_correlation_cohort
+from utils import TestDataset, setup_model, test_model, evaluate_metrics, compute_icc, plot_correlation_cohort, set_seed
 from datetime import datetime
+
+# Global seed for reproducibility
+SEED = 42
 
 now = datetime.now()
 
 
-@hydra.main(config_path="conf", config_name="config_test", version_base='1.1')
+@hydra.main(config_path="conf", config_name="config_inference", version_base='1.1')
 def main(cfg):
+    # Set seed for reproducibility
+    set_seed(SEED)
+
     output_path = cfg.data.log_path
     os.makedirs(output_path, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

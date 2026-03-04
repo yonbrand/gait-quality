@@ -5,7 +5,7 @@ gait_detection:
   head: fc
   is_classification: True
   pretrained: True
-  trained_model_path: weights\gait_detection_weights.pt
+  trained_model_path: weights/gait_detection_weights.pt
   name_start_idx: 0
 
 gait_speed:
@@ -17,7 +17,7 @@ gait_speed:
   num_layers_regressor: 0
   batch_norm: False
   pretrained: True
-  trained_model_path: weights\gait_speed_weights.pt
+  trained_model_path: weights/gait_speed_weights.pt
   name_start_idx: 1
   max_mu: 2.0
   max_var: 1.0
@@ -32,7 +32,7 @@ cadence:
   num_layers_regressor: 1
   batch_norm: True
   pretrained: True
-  trained_model_path: weights\cadence_weights.pt
+  trained_model_path: weights/cadence_weights.pt
   name_start_idx: 1
   max_mu: 160
   max_var: 300
@@ -46,7 +46,7 @@ gait_length:
   num_layers_regressor: 1
   batch_norm: True
   pretrained: True
-  trained_model_path: weights\gait_length_weights.pt
+  trained_model_path: weights/gait_length_weights.pt
   name_start_idx: 1
   max_mu: 2.0
   max_var: 1.0
@@ -61,7 +61,7 @@ regularity:
   num_layers_regressor: 1
   batch_norm: False
   pretrained: True
-  trained_model_path: weight\regularity_weights.pt
+  trained_model_path: weights/regularity_weights.pt
   name_start_idx: 1
   max_mu: 1.0
   max_var: 1.0

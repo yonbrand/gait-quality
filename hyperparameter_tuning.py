@@ -271,7 +271,10 @@ def objective(trial: optuna.Trial, cfg, logger: logging.Logger, run_path: Path, 
         predictions = []
         for fold, (train_dataset, val_dataset, test_dataset) in enumerate(preprocessed_data):
             model, optimizer, scheduler, batch_size = setup_model_with_params(cfg, trial, device)
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+            # Create generator for reproducible shuffling
+            g = torch.Generator()
+            g.manual_seed(seed + fold)  # Different seed per fold for variety, but reproducible
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, generator=g)
             val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
             test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
 

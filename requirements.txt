@@ -1,15 +1,32 @@
-hydra-core==1.3.2
-matplotlib==3.8.3
-numpy==2.2.6
-omegaconf==2.3.0
-optuna==3.6.1
-pandas==2.2.3
-pingouin==0.5.5
-scikit_learn==1.6.1
-scipy==1.15.3
-seaborn==0.13.2
+# Core ML/DL
 torch==2.0.1
 torchvision==0.15.2
-torchvision==0.17.1
+
+# Configuration & Hyperparameter Tuning
+hydra-core==1.3.2
+omegaconf==2.3.0
+optuna==3.6.1
+
+# Scientific Computing
+numpy<2.0
+scipy==1.15.3
+pandas==2.2.3
+scikit-learn==1.6.1
+
+# Statistics
+pingouin==0.5.5
+
+# Visualization
+matplotlib==3.8.3
+seaborn==0.13.2
+
+# Data Processing
+mat73
+python-dateutil
 tqdm==4.66.5
+
+# Transformations
 transforms3d==0.4.1
+
+# Accelerometry Processing (for RUSH pipeline)
+actipy
