@@ -328,12 +328,14 @@ set_seed(42)
 If you use this code or ElderNet in your research, please cite:
 
 ```bibtex
-@article{eldernet2025,
+@article{Brand2025Gait,
   title={Continuous Assessment of Daily-Living Gait Using Self-Supervised Learning of Wrist-Worn Accelerometer Data},
-  author={...},
+  author={Brand, Yonatan E and Buchman, Aron S and Kluge, Felix and Palmerini, Luca and Becker, Clemens and Cereatti, Andrea and Maetzler, Walter and Vereijken, Beatrix and Yarnall, Alison J and Rochester, Lynn and Del Din, Silvia and Mueller, Arne and Hausdorff, Jeffrey M and Perlman, Or},
   journal={medRxiv},
   year={2025},
-  url={https://www.medrxiv.org/content/10.1101/2025.05.21.25328061v1}
+  note={Preprint},
+  doi={10.1101/2025.05.21.25328061},
+  url={https://pmc.ncbi.nlm.nih.gov/articles/PMC12140532/}
 }
 ```
 
