@@ -13,7 +13,7 @@ This repository implements **ElderNet**, a deep learning model for estimating ga
 | **Cadence** | 0-160 steps/min | Stepping rate |
 | **Stride Regularity** | 0-1 | Gait consistency measure |
 
-**Paper**: ["Continuous Assessment of Daily-Living Gait Using Self-Supervised Learning of Wrist-Worn Accelerometer Data"]([https://www.medrxiv.org/content/10.1101/2025.05.21.25328061v1](https://www.nature.com/articles/s41746-026-02528-2))
+**Paper**: ["Continuous Assessment of Daily-Living Gait Using Self-Supervised Learning of Wrist-Worn Accelerometer Data"]([https://www.nature.com/articles/s41746-026-02528-2])
 
 ---
 
